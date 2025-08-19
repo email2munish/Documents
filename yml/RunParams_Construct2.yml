@@ -1,0 +1,57 @@
+parameters:
+  - name: mode
+    displayName: Pick Target Mode
+    type: string
+    default: CI
+    values:
+      - CI
+      - CD-CT
+      - CD
+      - CT
+      - Start
+      - Stop
+      - Restart
+      - OneClickToProd  # Removed parentheses
+
+  - name: env
+    displayName: Pick Target Environment
+    type: string
+    default: Dev
+    values:
+      - Dev
+      - Test1_REGION1
+      - Test1_REGION2
+      - Test2_REGION1
+      - Test2_REGION2
+      - Test1_REGION1,Test1_REGION2
+      - Test2_REGION1,Test2_REGION2
+      - PROD1_REGION1
+      - PROD1_REGION2
+
+  - name: Artifact_ID
+    displayName: Artifact Number
+    type: string
+    default: Latest
+
+  - name: parallel_deployment
+    displayName: Deploy Parallel?
+    type: boolean
+    default: true
+
+trigger: none
+
+pool:
+  name: MyLocalAgentPool
+
+stages:
+- ${{ each region in split(parameters.env, ',') }}:
+  - stage: Deploy_${{ region }}
+    displayName: Deploy to ${{ region }}
+    ${{ if eq(parameters.parallel_deployment, true) }}:
+      dependsOn: []
+    jobs:
+    - job: DeployJob_${{ region }}
+      displayName: Deploy to ${{ region }}
+      steps:
+      - script: echo "Deploying to ${{ region }}"
+        displayName: Echo Region

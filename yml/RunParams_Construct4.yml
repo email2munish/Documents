@@ -1,0 +1,138 @@
+parameters:
+  - name: mode
+    displayName: Pick Target Mode
+    type: string
+    default: CI
+    values:
+      - LeftShift
+      - CI
+      - CD-CT
+      - CD
+      - CT
+      - Start
+      - Stop
+      - Restart
+      - OneClickToProd  # Removed parentheses
+
+  - name: env
+    displayName: Pick Target Environment
+    type: string
+    default: Dev
+    values:
+      - Dev
+      - Test1_REGION1
+      - Test1_REGION2
+      - Test2_REGION1
+      - Test2_REGION2
+      - Test1_REGION1,Test1_REGION2
+      - Test2_REGION1,Test2_REGION2
+      - PROD1_REGION1
+      - PROD_REGION2
+      - PROD_REGION1,PROD_REGION2
+
+  - name: Artifact_ID
+    displayName: Artifact Number
+    type: string
+    default: Latest
+
+  - name: parallel_deployment
+    displayName: Deploy Parallel?
+    type: boolean
+    default: true
+
+trigger: none
+
+pool:
+  name: MyLocalAgentPool
+
+stages:
+- stage: LeftShift
+  condition: ${{ eq(parameters.mode, 'LeftShift') }}
+  displayName: "LeftShift Pipeline"
+  jobs:
+  - job: LeftShift
+    displayName: "Job LeftShift - build & Deploy"
+    steps:
+    - script: echo "Building the application .."
+      displayName: "Build step"
+
+- stage: CI
+  condition: ${{ eq(parameters.mode, 'CI') }}
+  displayName: "CI Pipeline"
+  jobs:
+  - job: CI
+    displayName: "Job CI - build"
+    steps:
+    - script: echo "Building the application .."
+      displayName: "Build step"
+
+- stage: CT
+  condition: ${{ eq(parameters.mode, 'CT') }}
+  displayName: "CT  Pipeline"
+  jobs:
+  - job: CT
+    displayName: "Job CT - Test"
+    steps:
+    - script: echo "Testing the application .."
+      displayName: "Test step"
+
+- ${{ each region in split(parameters.env, ',') }}:
+  - stage: Deploy_${{ region }}
+    condition: ${{ or(eq(parameters.mode, 'CD'), eq(parameters.mode, 'CD-CT')) }}
+    displayName: CD-CT Pipeline on ${{ region }}
+    ${{ if eq(parameters.parallel_deployment, true) }}:
+      dependsOn: []
+    jobs:
+    - job: DeployJob_${{ region }}
+      displayName: Deploy to ${{ region }}
+      steps:
+      - script: echo "Deploying to ${{ region }}"
+        displayName: Echo Region
+    - job: CT
+      dependsOn: DeployJob_${{ region }}
+      condition: ${{ eq(parameters.mode, 'CD-CT') }}  
+      displayName: "Job CT - Test"
+      steps:
+      - script: echo "Testing the application .."
+        displayName: "Test step"
+
+- stage: Start
+  condition: ${{ eq(parameters.mode, 'Start') }}
+  displayName: "Start Service pipeline"
+  jobs:
+  - job: Start
+    displayName: "Job Start - Started"
+    steps:
+    - script: echo "Starting the application .."
+      displayName: "Starting step"
+      
+- stage: Stop
+  condition: ${{ eq(parameters.mode, 'Stop') }}
+  displayName: "Stop Service pipeline"
+  jobs:
+  - job: Stop
+    displayName: "Job Stop - Stopping"
+    steps:
+    - script: echo "Stopping the application .."
+      displayName: "Sttoping step"
+      
+- stage: Restart
+  condition: ${{ eq(parameters.mode, 'Restart') }}
+  displayName: "Restart Service pipeline"
+  jobs:
+  - job: Restart
+    displayName: "Job Restart - Test"
+    steps:
+    - script: echo "ReStarting the application .."
+      displayName: "ReStarting step"
+
+- stage: OneClickToProd
+  condition: ${{ eq(parameters.mode, 'OneClickToProd') }}
+  displayName: "OneClickToProd(advanced Pipeline for matured projects)"
+  jobs:
+  - job: OneClickToProd
+    displayName: "Job OneClickToProd - Start"
+    steps:
+    - script: echo "Application OneClickToProd"
+      displayName: "OneClickToProd step"
+

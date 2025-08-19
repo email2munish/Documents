@@ -1,0 +1,119 @@
+parameters:
+  - name: mode
+    displayName: Pick Target Mode
+    type: string
+    default: CI
+    values:
+      - CI
+      - CD-CT
+      - CD
+      - CT
+      - Start
+      - Stop
+      - Restart
+      - OneClickToProd  # Removed parentheses
+
+  - name: env
+    displayName: Pick Target Environment
+    type: string
+    default: Dev
+    values:
+      - Dev
+      - Test1_REGION1
+      - Test1_REGION2
+      - Test2_REGION1
+      - Test2_REGION2
+      - Test1_REGION1,Test1_REGION2
+      - Test2_REGION1,Test2_REGION2
+      - PROD1_REGION1
+      - PROD1_REGION2
+
+  - name: Artifact_ID
+    displayName: Artifact Number
+    type: string
+    default: Latest
+
+  - name: parallel_deployment
+    displayName: Deploy Parallel?
+    type: boolean
+    default: true
+
+trigger: none
+
+pool:
+  name: MyLocalAgentPool
+
+stages:
+- stage: CI
+  condition: ${{ eq(parameters.mode, 'CI') }}
+  displayName: "Stage CI"
+  jobs:
+  - job: CI
+    displayName: "Job CI - build"
+    steps:
+    - script: echo "Building the application .."
+      displayName: "Build step"
+
+- stage: CT
+  condition: ${{ eq(parameters.mode, 'CT') }}
+  displayName: "Stage CT"
+  jobs:
+  - job: CI
+    displayName: "Job CT - Test"
+    steps:
+    - script: echo "Testing the application .."
+      displayName: "Test step"
+
+- ${{ each region in split(parameters.env, ',') }}:
+  - stage: Deploy_${{ region }}
+    condition: ${{ or(eq(parameters.mode, 'CD'), eq(parameters.mode, 'CD-CT')) }}
+    displayName: Deploy to ${{ region }}
+    ${{ if eq(parameters.parallel_deployment, true) }}:
+      dependsOn: []
+    jobs:
+    - job: DeployJob_${{ region }}
+      displayName: Deploy to ${{ region }}
+      steps:
+      - script: echo "Deploying to ${{ region }}"
+        displayName: Echo Region
+
+- stage: Start
+  condition: ${{ eq(parameters.mode, 'Start') }}
+  displayName: "Stage Start"
+  jobs:
+  - job: CI
+    displayName: "Job Start - Started"
+    steps:
+    - script: echo "Starting the application .."
+      displayName: "Starting step"
+      
+- stage: Stop
+  condition: ${{ eq(parameters.mode, 'Stop') }}
+  displayName: "Stage Stop"
+  jobs:
+  - job: CI
+    displayName: "Job Stop - Stopping"
+    steps:
+    - script: echo "Stopping the application .."
+      displayName: "Sttoping step"
+      
+- stage: Restart
+  condition: ${{ eq(parameters.mode, 'Restart') }}
+  displayName: "Stage Restart"
+  jobs:
+  - job: CI
+    displayName: "Job Restart - Test"
+    steps:
+    - script: echo "ReStarting the application .."
+      displayName: "ReStarting step"
+
+- stage: OneClickToProd
+  condition: ${{ eq(parameters.mode, 'OneClickToProd') }}
+  displayName: "Stage OneClickToProd"
+  jobs:
+  - job: CI
+    displayName: "Job OneClickToProd - Start"
+    steps:
+    - script: echo "Application OneClickToProd"
+      displayName: "OneClickToProd step"
+
