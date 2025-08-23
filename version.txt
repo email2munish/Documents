@@ -1,3 +1,18 @@
+if [ -z "$latestTag" ]; then
+  patch=0
+else
+  latestYearMonth=$(echo "$latestTag" | awk -F '-' '{print $NF}' | awk -F '.' '{print $1"."$2}')
+  currentYearMonth="${year}.${month}"
+
+  if [ "$latestYearMonth" != "$currentYearMonth" ]; then
+    patch=0
+  else
+    patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+    patch=$((patch + 1))
+  fi
+fi
+
+######################################################################################3
 trigger:
 - "*"
 
@@ -842,6 +857,7 @@ steps:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 	
 ############################################################################################################################
+
 
 
 
