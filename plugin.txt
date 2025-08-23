@@ -1,0 +1,239 @@
+parameters:
+  - name: mode
+    type: string
+    default: CI
+    values:
+      - LeftShift
+      - CI
+      - CD-CT
+      - CD
+      - CT
+      - Start
+      - Stop
+      - Restart
+      - OneClickToProd
+
+  - name: env
+    type: string
+    default: Dev
+    values:
+      - Dev
+      - Test1_REGION1
+      - Test1_REGION2
+      - Test2_REGION1
+      - Test2_REGION2
+      - Test1_REGION1,Test1_REGION2
+      - Test2_REGION1,Test2_REGION2
+      - PROD1_REGION1
+      - PROD_REGION2
+      - PROD_REGION1,PROD_REGION2
+
+  - name: Artifact_ID
+    type: string
+    default: Latest
+
+  - name: parallel_deployment
+    type: boolean
+    default: true
+
+  - name: decoPlugins
+    type: object
+    default:
+      - _beforeStage: CI
+        template: /template2.yml
+      - _afterStage: CI
+        template: /template1.yml
+      - _beforeStage: CT
+        template: /template3.yml
+      - _afterStage: CD
+        template: /template4.yml
+
+extends:
+  template: pipeline-logic.yml
+  parameters:
+    mode: ${{ parameters.mode }}
+    env: ${{ parameters.env }}
+    Artifact_ID: ${{ parameters.Artifact_ID }}
+    parallel_deployment: ${{ parameters.parallel_deployment }}
+    decoPlugins: ${{ parameters.decoPlugins }}
+
+================================================================================
+
+parameters:
+  - name: mode
+    type: string
+  - name: env
+    type: string
+  - name: Artifact_ID
+    type: string
+  - name: parallel_deployment
+    type: boolean
+  - name: decoPlugins
+    type: object
+
+trigger: none
+
+pool:
+  name: MyLocalAgentPool
+
+# Inject templates BEFORE LeftShift
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._beforeStage, 'LeftShift') }}:
+    - template: ${{ plugin.template }}
+
+- stage: LeftShift
+  condition: ${{ eq(parameters.mode, 'LeftShift') }}
+  jobs:
+  - job: LeftShift
+    steps:
+    - script: echo "Building the application .."
+
+# Inject templates AFTER LeftShift
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._afterStage, 'LeftShift') }}:
+    - template: ${{ plugin.template }}
+
+# Inject templates BEFORE CI
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._beforeStage, 'CI') }}:
+    - template: ${{ plugin.template }}
+
+- stage: CI
+  condition: ${{ eq(parameters.mode, 'CI') }}
+  jobs:
+  - job: CI
+    steps:
+    - script: echo "Building the application .."
+
+# Inject templates AFTER CI
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._afterStage, 'CI') }}:
+    - template: ${{ plugin.template }}
+
+# Inject templates BEFORE CT
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._beforeStage, 'CT') }}:
+    - template: ${{ plugin.template }}
+
+- stage: CT
+  condition: ${{ eq(parameters.mode, 'CT') }}
+  jobs:
+  - job: CT
+    steps:
+    - script: echo "Testing the application .."
+
+# Inject templates AFTER CT
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._afterStage, 'CT') }}:
+    - template: ${{ plugin.template }}
+
+# Inject templates BEFORE CD
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._beforeStage, 'CD') }}:
+    - template: ${{ plugin.template }}
+
+- ${{ each region in split(parameters.env, ',') }}:
+  - stage: Deploy_${{ region }}
+    condition: ${{ or(eq(parameters.mode, 'CD'), eq(parameters.mode, 'CD-CT')) }}
+    ${{ if eq(parameters.parallel_deployment, true) }}:
+      dependsOn: []
+    jobs:
+    - job: DeployJob_${{ region }}
+      steps:
+      - script: echo "Deploying to ${{ region }}"
+    - job: CT
+      dependsOn: DeployJob_${{ region }}
+      condition: ${{ eq(parameters.mode, 'CD-CT') }}
+      steps:
+      - script: echo "Testing the application .."
+
+# Inject templates AFTER CD
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._afterStage, 'CD') }}:
+    - template: ${{ plugin.template }}
+
+# Other stages (Start, Stop, Restart, OneClickToProd) follow same pattern...
+
+
+##################################################################################################################3
+
+child template 2 modular use parent from above
+
+# Inject plugins around LeftShift
+- template: inject-plugins.yml
+  parameters:
+    stageName: LeftShift
+    decoPlugins: ${{ parameters.decoPlugins }}
+
+- stage: LeftShift
+  condition: ${{ eq(parameters.mode, 'LeftShift') }}
+  jobs:
+  - job: LeftShift
+    steps:
+    - script: echo "Building the application .."
+
+# Inject plugins around CI
+- template: inject-plugins.yml
+  parameters:
+    stageName: CI
+    decoPlugins: ${{ parameters.decoPlugins }}
+
+- stage: CI
+  condition: ${{ eq(parameters.mode, 'CI') }}
+  jobs:
+  - job: CI
+    steps:
+    - script: echo "Building the application .."
+
+# Inject plugins around CT
+- template: inject-plugins.yml
+  parameters:
+    stageName: CT
+    decoPlugins: ${{ parameters.decoPlugins }}
+
+- stage: CT
+  condition: ${{ eq(parameters.mode, 'CT') }}
+  jobs:
+  - job: CT
+    steps:
+    - script: echo "Testing the application .."
+
+# Inject plugins around CD
+- template: inject-plugins.yml
+  parameters:
+    stageName: CD
+    decoPlugins: ${{ parameters.decoPlugins }}
+
+- ${{ each region in split(parameters.env, ',') }}:
+  - stage: Deploy_${{ region }}
+    condition: ${{ or(eq(parameters.mode, 'CD'), eq(parameters.mode, 'CD-CT')) }}
+    ${{ if eq(parameters.parallel_deployment, true) }}:
+      dependsOn: []
+    jobs:
+    - job: DeployJob_${{ region }}
+      steps:
+      - script: echo "Deploying to ${{ region }}"
+    - job: CT
+      dependsOn: DeployJob_${{ region }}
+      condition: ${{ eq(parameters.mode, 'CD-CT') }}
+      steps:
+      - script: echo "Testing the application .."
+	  
+	  
+subchild template
+
+parameters:
+  - name: stageName
+    type: string
+  - name: decoPlugins
+    type: object
+
+# Inject templates BEFORE the stage
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._beforeStage, parameters.stageName) }}:
+    - template: ${{ plugin.template }}
+
+# Inject templates AFTER the stage
+- ${{ each plugin in parameters.decoPlugins }}:
+  - ${{ if eq(plugin._afterStage, parameters.stageName) }}:
+    - template: ${{ plugin.template }}
