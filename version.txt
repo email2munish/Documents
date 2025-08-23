@@ -10,6 +10,113 @@ stages:
   jobs:
   - job: TagJob
     displayName: 'Tagging Job'
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      name: tagStep
+      displayName: 'Generate tag (no push)'
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+
+          git fetch --tags
+
+          year=$(date +%Y)
+          month=$(date +%m)
+
+          rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+          branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+          if [[ "$branchLower" == feature* ]]; then
+            tagType="FEATURE"
+            shouldTag=false
+          elif [[ "$branchLower" == release* ]]; then
+            tagType="RELEASE"
+            shouldTag=true
+          elif [[ "$branchLower" == dev* ]]; then
+            tagType="DEV"
+            shouldTag=true
+          elif [[ "$branchLower" == hot* ]]; then
+            tagType="HOTFIX"
+            shouldTag=true
+          elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+            tagType="RELEASEM"
+            shouldTag=true
+          elif [[ "$branchLower" == support* ]]; then
+            tagType="SUPPORT"
+            shouldTag=false
+          else
+            echo "❌ Branch '$rawBranch' does not match any tagging rule."
+            exit 1
+          fi
+
+          tagPrefix="${serviceName}-${tagType}-"
+          latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+          if [ -z "$latestTag" ]; then
+            patch=0
+          else
+            patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+            patch=$((patch + 1))
+          fi
+
+          newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+
+          echo "##vso[task.setvariable variable=tagName;isOutput=true]$newTag"
+          echo "##vso[task.setvariable variable=tagType;isOutput=true]$tagType"
+          echo "##vso[task.setvariable variable=shouldTag;isOutput=true]$shouldTag"
+
+          echo "ℹ️ Proposed tag: $newTag"
+          echo "ℹ️ Tag type: $tagType"
+          echo "ℹ️ Should tag: $shouldTag"
+
+- stage: PushTagStage
+  displayName: 'Push Tag to Repo'
+  dependsOn: TagStage
+  condition: succeeded()
+  variables:
+    tagName: $[ stageDependencies.TagStage.TagJob.outputs['tagStep.tagName'] ]
+    tagType: $[ stageDependencies.TagStage.TagJob.outputs['tagStep.tagType'] ]
+    shouldTag: $[ stageDependencies.TagStage.TagJob.outputs['tagStep.shouldTag'] ]
+  jobs:
+  - job: PushTagJob
+    displayName: 'Push Tag Job'
+    steps:
+    - checkout: self
+
+    - script: |
+        echo "🔖 Tag to push: $(tagName)"
+        echo "🔖 Tag type: $(tagType)"
+        echo "🔖 Should tag: $(shouldTag)"
+
+        if [ "$(shouldTag)" != "true" ]; then
+          echo "🚫 Tagging skipped for type $(tagType)"
+          exit 0
+        fi
+
+        git config user.email "buildagent@azure.com"
+        git config user.name "Azure DevOps Pipeline"
+
+        git tag -a "$(tagName)" -m "Auto-tagged by pipeline: $(tagName)"
+        git push origin "$(tagName)"
+      displayName: 'Push tag to Git repo'
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+######################################################################################################################
+trigger:
+- "*"
+
+variables:
+  serviceName: 'MyService'
+
+stages:
+- stage: TagStage
+  displayName: 'Generate Tag'
+  jobs:
+  - job: TagJob
+    displayName: 'Tagging Job'
     outputs:
       tagOutput: tagStep.tagName
       tagTypeOutput: tagStep.tagType
@@ -735,5 +842,6 @@ steps:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 	
 ############################################################################################################################
+
 
 
