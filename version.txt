@@ -1,0 +1,739 @@
+trigger:
+- "*"
+
+variables:
+  serviceName: 'MyService'
+
+stages:
+- stage: TagStage
+  displayName: 'Generate Tag'
+  jobs:
+  - job: TagJob
+    displayName: 'Tagging Job'
+    outputs:
+      tagOutput: tagStep.tagName
+      tagTypeOutput: tagStep.tagType
+      shouldTagOutput: tagStep.shouldTag
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      name: tagStep
+      displayName: 'Generate tag (no push)'
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+
+          git fetch --tags
+
+          year=$(date +%Y)
+          month=$(date +%m)
+
+          rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+          branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+          if [[ "$branchLower" == feature* ]]; then
+            tagType="FEATURE"
+            shouldTag=false
+          elif [[ "$branchLower" == release* ]]; then
+            tagType="RELEASE"
+            shouldTag=true
+          elif [[ "$branchLower" == dev* ]]; then
+            tagType="DEV"
+            shouldTag=true
+          elif [[ "$branchLower" == hot* ]]; then
+            tagType="HOTFIX"
+            shouldTag=true
+          elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+            tagType="RELEASEM"
+            shouldTag=true
+          elif [[ "$branchLower" == support* ]]; then
+            tagType="SUPPORT"
+            shouldTag=false
+          else
+            echo "❌ Branch '$rawBranch' does not match any tagging rule."
+            exit 1
+          fi
+
+          tagPrefix="${serviceName}-${tagType}-"
+          latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+          if [ -z "$latestTag" ]; then
+            patch=0
+          else
+            patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+            patch=$((patch + 1))
+          fi
+
+          newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+
+          echo "##vso[task.setvariable variable=tagName;isOutput=true]$newTag"
+          echo "##vso[task.setvariable variable=tagType;isOutput=true]$tagType"
+          echo "##vso[task.setvariable variable=shouldTag;isOutput=true]$shouldTag"
+
+          echo "ℹ️ Proposed tag: $newTag"
+          echo "ℹ️ Tag type: $tagType"
+          echo "ℹ️ Should tag: $shouldTag"
+
+- stage: PushTagStage
+  displayName: 'Push Tag to Repo'
+  dependsOn: TagStage
+  condition: succeeded()
+  variables:
+    tagName: $[ stageDependencies.TagStage.TagJob.outputs['tagOutput.tagName'] ]
+    tagType: $[ stageDependencies.TagStage.TagJob.outputs['tagTypeOutput.tagType'] ]
+    shouldTag: $[ stageDependencies.TagStage.TagJob.outputs['shouldTagOutput.shouldTag'] ]
+  jobs:
+  - job: PushTagJob
+    displayName: 'Push Tag Job'
+    steps:
+    - checkout: self
+
+    - script: |
+        echo "🔖 Tag to push: $(tagName)"
+        echo "🔖 Tag type: $(tagType)"
+        echo "🔖 Should tag: $(shouldTag)"
+
+        if [ "$(shouldTag)" != "true" ]; then
+          echo "🚫 Tagging skipped for type $(tagType)"
+          exit 0
+        fi
+
+        git config user.email "buildagent@azure.com"
+        git config user.name "Azure DevOps Pipeline"
+
+        git tag -a "$(tagName)" -m "Auto-tagged by pipeline: $(tagName)"
+        git push origin "$(tagName)"
+      displayName: 'Push tag to Git repo'
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+		
+################################################################################################################################
+
+trigger:
+- "*"
+
+variables:
+  serviceName: 'MyService'
+
+stages:
+- stage: TagStage
+  displayName: 'Generate Tag'
+  jobs:
+  - job: TagJob
+    displayName: 'Tagging Job'
+    outputs:
+      tagOutput: tagStep.tagName
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      name: tagStep
+      displayName: 'Generate and optionally push tag'
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+
+          git config user.email "buildagent@azure.com"
+          git config user.name "Azure DevOps Pipeline"
+          git fetch --tags
+
+          year=$(date +%Y)
+          month=$(date +%m)
+
+          rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+          branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+          if [[ "$branchLower" == feature* ]]; then
+            tagType="FEATURE"
+            shouldTag=false
+          elif [[ "$branchLower" == release* ]]; then
+            tagType="RELEASE"
+            shouldTag=true
+          elif [[ "$branchLower" == dev* ]]; then
+            tagType="DEV"
+            shouldTag=true
+          elif [[ "$branchLower" == hot* ]]; then
+            tagType="HOTFIX"
+            shouldTag=true
+          elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+            tagType="RELEASEM"
+            shouldTag=true
+          elif [[ "$branchLower" == support* ]]; then
+            tagType="SUPPORT"
+            shouldTag=false
+          else
+            echo "❌ Branch '$rawBranch' does not match any tagging rule."
+            exit 1
+          fi
+
+          tagPrefix="${serviceName}-${tagType}-"
+          latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+          if [ -z "$latestTag" ]; then
+            patch=0
+          else
+            patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+            patch=$((patch + 1))
+          fi
+
+          newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+
+          echo "##vso[task.setvariable variable=tagName;isOutput=true]$newTag"
+
+          if [ "$shouldTag" = false ]; then
+            echo "ℹ️ Proposed tag: $newTag (not pushed)"
+            exit 0
+          fi
+
+          echo "✅ Creating and pushing tag: $newTag"
+          git tag -a "$newTag" -m "Auto-tagged by pipeline: $newTag"
+          git push origin "$newTag"
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+- stage: UseTagStage
+  displayName: 'Use Tag in Later Stage'
+  dependsOn: TagStage
+  variables:
+    tagName: $[ stageDependencies.TagStage.TagJob.outputs['tagOutput.tagName'] ]
+  jobs:
+  - job: UseTagJob
+    displayName: 'Use Tag Job'
+    steps:
+    - script: |
+        echo "🔖 Using tag from previous stage: $(tagName)"
+        # You can use $(tagName) in deployment, packaging, etc.
+      displayName: 'Display Tag'
+	  
+################################################################################################################################
+
+trigger:
+- "*"
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  serviceName: 'MyService'
+
+jobs:
+- job: TagJob
+  displayName: 'Generate Tag'
+  outputs:
+    tagOutput: tagStep.tagName
+  steps:
+  - checkout: self
+
+  - task: Bash@3
+    name: tagStep
+    displayName: 'Generate and optionally push tag'
+    inputs:
+      targetType: 'inline'
+      script: |
+        set -e
+
+        git config user.email "buildagent@azure.com"
+        git config user.name "Azure DevOps Pipeline"
+        git fetch --tags
+
+        year=$(date +%Y)
+        month=$(date +%m)
+
+        rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+        branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+        if [[ "$branchLower" == feature* ]]; then
+          tagType="FEATURE"
+          shouldTag=false
+        elif [[ "$branchLower" == release* ]]; then
+          tagType="RELEASE"
+          shouldTag=true
+        elif [[ "$branchLower" == dev* ]]; then
+          tagType="DEV"
+          shouldTag=true
+        elif [[ "$branchLower" == hot* ]]; then
+          tagType="HOTFIX"
+          shouldTag=true
+        elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+          tagType="RELEASEM"
+          shouldTag=true
+        elif [[ "$branchLower" == support* ]]; then
+          tagType="SUPPORT"
+          shouldTag=false
+        else
+          echo "❌ Branch '$rawBranch' does not match any tagging rule."
+          exit 1
+        fi
+
+        tagPrefix="${serviceName}-${tagType}-"
+        latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+        if [ -z "$latestTag" ]; then
+          patch=0
+        else
+          patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+          patch=$((patch + 1))
+        fi
+
+        newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+
+        echo "##vso[task.setvariable variable=tagName;isOutput=true]$newTag"
+
+        if [ "$shouldTag" = false ]; then
+          echo "ℹ️ Proposed tag: $newTag (not pushed)"
+          exit 0
+        fi
+
+        echo "✅ Creating and pushing tag: $newTag"
+        git tag -a "$newTag" -m "Auto-tagged by pipeline: $newTag"
+        git push origin "$newTag"
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+- job: LaterJob
+  displayName: 'Use Generated Tag'
+  dependsOn: TagJob
+  variables:
+    tagName: $[ dependencies.TagJob.outputs['tagOutput.tagName'] ]
+  steps:
+  - script: |
+      echo "🔖 Using tag: $(tagName)"
+      # You can use $(tagName) in any step here
+    displayName: 'Display Tag'
+	
+################################################################################################################################
+
+trigger:
+- "*"
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  serviceName: 'MyService'  # Change this to your actual service name
+
+steps:
+- checkout: self
+
+- script: |
+    set -e  # Exit on any error
+
+    git config user.email "buildagent@azure.com"
+    git config user.name "Azure DevOps Pipeline"
+
+    # Fetch all tags
+    git fetch --tags
+
+    # Get current year and month
+    year=$(date +%Y)
+    month=$(date +%m)
+
+    # Get branch name (strip refs/heads/)
+    rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+    branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+    # Determine tag type based on branch prefix
+    if [[ "$branchLower" == feature* ]]; then
+      tagType="FEATURE"
+      shouldTag=false
+    elif [[ "$branchLower" == release* ]]; then
+      tagType="RELEASE"
+      shouldTag=true
+    elif [[ "$branchLower" == dev* ]]; then
+      tagType="DEV"
+      shouldTag=true
+    elif [[ "$branchLower" == hot* ]]; then
+      tagType="HOTFIX"
+      shouldTag=true
+    elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+      tagType="RELEASEM"
+      shouldTag=true
+    elif [[ "$branchLower" == support* ]]; then
+      tagType="SUPPORT"
+      shouldTag=false
+    else
+      echo "❌ Branch '$rawBranch' does not match any tagging rule. Failing pipeline."
+      exit 1
+    fi
+
+    # Construct tag prefix for filtering
+    tagPrefix="${serviceName}-${tagType}-"
+
+    # Find latest tag for this branch type
+    latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+    if [ -z "$latestTag" ]; then
+      patch=0
+    else
+      patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+      patch=$((patch + 1))
+    fi
+
+    newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+
+    if [ "$shouldTag" = false ]; then
+      echo "ℹ️ Proposed tag for branch '$rawBranch': $newTag"
+      exit 0
+    fi
+
+    echo "✅ Creating and pushing tag: $newTag"
+
+    # Create and push the new tag
+    git tag -a "$newTag" -m "Auto-tagged by pipeline: $newTag"
+    git push origin "$newTag"
+  displayName: 'Branch-aware semantic tagging'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+	
+###################################################################################################################################3
+
+Requirements for Compatibility
+- Bash shell (#!/bin/bash or sh) — used for scripting
+- Git CLI — for fetching tags, creating and pushing new ones
+- Standard UNIX utilities:
+- date — for timestamping the tag
+- sed, awk, grep, sort, tr — for string manipulation and version parsing
+These are all preinstalled on most Linux-based CI agents, especially those provided by Azure Pipelines, GitHub Actions, GitLab CI, Jenkins, etc.
+
+⚠️ Edge Cases to Watch For
+- Minimalist distros like Alpine Linux may use BusyBox, which has limited versions of sed, awk, or date. If you're using Alpine, you might need to install GNU versions via apk add coreutils.
+- Git not installed: If you're using a custom container or VM image, ensure git is available.
+- Authentication: The script uses $(System.AccessToken) to push tags. Make sure your pipeline has Allow scripts to access OAuth token enabled in the agent job settings.
+
+🛠️ Optional Enhancements
+If you want to make it even more portable or robust:
+- Replace date +%Y and date +%m with TZ=UTC date +%Y to ensure consistent timezone
+- Add a check for git availability: command -v git >/dev/null || { echo "Git not found"; exit 1; }
+
+So yes, unless you're running on a highly stripped-down Linux image, this script should run smoothly across virtually all Linux agents. Want help adapting it for a specific distro or container image?
+
+
+##############################################################################################################################
+
+trigger:
+- "*"
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  serviceName: 'MyService'  # Change this to your actual service name
+
+steps:
+- checkout: self
+
+- script: |
+    set -e  # Exit on any error
+
+    git config user.email "buildagent@azure.com"
+    git config user.name "Azure DevOps Pipeline"
+
+    # Fetch all tags
+    git fetch --tags
+
+    # Get current year and month
+    year=$(date +%Y)
+    month=$(date +%m)
+
+    # Get branch name (strip refs/heads/)
+    rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+    branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+    # Determine tag type based on branch prefix
+    if [[ "$branchLower" == feature* ]]; then
+      tagType="FEATURE"
+      shouldTag=false
+    elif [[ "$branchLower" == release* ]]; then
+      tagType="RELEASE"
+      shouldTag=true
+    elif [[ "$branchLower" == dev* ]]; then
+      tagType="DEV"
+      shouldTag=true
+    elif [[ "$branchLower" == hot* ]]; then
+      tagType="HOTFIX"
+      shouldTag=true
+    elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+      tagType="RELEASEM"
+      shouldTag=true
+    elif [[ "$branchLower" == support* ]]; then
+      tagType="SUPPORT"
+      shouldTag=false
+    else
+      echo "❌ Branch '$rawBranch' does not match any tagging rule. Failing pipeline."
+      exit 1
+    fi
+
+    # Construct tag prefix for filtering
+    tagPrefix="${serviceName}-${tagType}-"
+
+    # Find latest tag for this branch type
+    latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+    if [ -z "$latestTag" ]; then
+      patch=0
+    else
+      patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+      patch=$((patch + 1))
+    fi
+
+    newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+
+    if [ "$shouldTag" = false ]; then
+      echo "ℹ️ Proposed tag for branch '$rawBranch': $newTag"
+      exit 0
+    fi
+
+    echo "✅ Creating and pushing tag: $newTag"
+
+    # Create and push the new tag
+    git tag -a "$newTag" -m "Auto-tagged by pipeline: $newTag"
+    git push origin "$newTag"
+  displayName: 'Branch-aware semantic tagging'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+	
+	
+###########################################################################################################################33
+
+trigger:
+- "*"
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  serviceName: 'MyService'  # Change this to your actual service name
+
+steps:
+- checkout: self
+
+- script: |
+    set -e  # Exit on any error
+
+    git config user.email "buildagent@azure.com"
+    git config user.name "Azure DevOps Pipeline"
+
+    # Fetch all tags
+    git fetch --tags
+
+    # Get current year and month
+    year=$(date +%Y)
+    month=$(date +%m)
+
+    # Get branch name (strip refs/heads/)
+    rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+    branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+    # Determine tag type based on branch prefix
+    if [[ "$branchLower" == feature* ]]; then
+      tagType="FEATURE"
+    elif [[ "$branchLower" == release* ]]; then
+      tagType="RELEASE"
+    elif [[ "$branchLower" == dev* ]]; then
+      tagType="DEV"
+    elif [[ "$branchLower" == hot* ]]; then
+      tagType="HOTFIX"
+    elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+      tagType="RELEASEM"
+    elif [[ "$branchLower" == support* ]]; then
+      tagType="SUPPORT"
+    else
+      echo "❌ Branch '$rawBranch' does not match any tagging rule. Failing pipeline."
+      exit 1
+    fi
+
+    # Construct tag prefix for filtering
+    tagPrefix="${serviceName}-${tagType}-"
+
+    # Find latest tag for this branch type
+    latestTag=$(git tag | grep "^$tagPrefix" | sort -V | tail -n 1)
+
+    if [ -z "$latestTag" ]; then
+      patch=0
+    else
+      # Extract patch number from tag (assumes format: ServiceName-TYPE-YYYY.mm.patch)
+      patch=$(echo "$latestTag" | awk -F '.' '{print $NF}')
+      patch=$((patch + 1))
+    fi
+
+    newTag="${serviceName}-${tagType}-${year}.${month}.${patch}"
+    echo "✅ Creating new tag: $newTag"
+
+    # Create and push the new tag
+    git tag -a "$newTag" -m "Auto-tagged by pipeline: $newTag"
+    git push origin "$newTag"
+  displayName: 'Tag repo with branch-type semantic version'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+	
+#############################################################################################################################
+
+trigger:
+- "*"
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  serviceName: 'MyService'  # Change this to your actual service name
+
+steps:
+- checkout: self
+
+- script: |
+    set -e  # Exit on any error
+
+    git config user.email "buildagent@azure.com"
+    git config user.name "Azure DevOps Pipeline"
+
+    # Fetch all tags
+    git fetch --tags
+
+    # Get current year and month
+    year=$(date +%Y)
+    month=$(date +%m)
+
+    # Get branch name (strip refs/heads/)
+    rawBranch=$(echo "$(Build.SourceBranch)" | sed 's|refs/heads/||')
+    branchLower=$(echo "$rawBranch" | tr '[:upper:]' '[:lower:]')
+
+    # Determine tag type based on branch prefix
+    if [[ "$branchLower" == feature* ]]; then
+      tagType="FEATURE"
+    elif [[ "$branchLower" == release* ]]; then
+      tagType="RELEASE"
+    elif [[ "$branchLower" == dev* ]]; then
+      tagType="DEV"
+    elif [[ "$branchLower" == hot* ]]; then
+      tagType="HOTFIX"
+    elif [[ "$branchLower" == main* || "$branchLower" == mast* ]]; then
+      tagType="RELEASEM"
+    elif [[ "$branchLower" == support* ]]; then
+      tagType="SUPPORT"
+    else
+      echo "❌ Branch '$rawBranch' does not match any tagging rule. Failing pipeline."
+      exit 1
+    fi
+
+    # Construct tag prefix
+    prefix="${serviceName}-${tagType}-${year}.${month}."
+
+    # Find latest matching tag
+    latestTag=$(git tag | grep "^$prefix" | sort -V | tail -n 1)
+
+    if [ -z "$latestTag" ]; then
+      patch=0
+    else
+      patch=${latestTag##*.}
+      patch=$((patch + 1))
+    fi
+
+    newTag="${prefix}${patch}"
+    echo "✅ Creating new tag: $newTag"
+
+    # Create and push the new tag
+    git tag -a "$newTag" -m "Auto-tagged by pipeline: $newTag"
+    git push origin "$newTag"
+  displayName: 'Tag repo with branch-based semantic version'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+	
+#############################################################################################################################
+
+trigger:
+- main  # Adjust as needed
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  serviceName: 'MyService'  # Customize this to your actual service name
+
+steps:
+- checkout: self
+
+- script: |
+    git config user.email "buildagent@azure.com"
+    git config user.name "Azure DevOps Pipeline"
+
+    # Fetch all tags
+    git fetch --tags
+
+    # Get current year and month
+    year=$(date +%Y)
+    month=$(date +%m)
+
+    # Get branch name (strip refs/heads/)
+    branchName=$(echo $(Build.SourceBranch) | sed 's|refs/heads/||')
+    branchTag=$(echo $branchName | tr '[:lower:]' '[:upper:]')  # Uppercase for tag
+
+    # Filter tags matching current year, month, and branch
+    prefix="${serviceName}_${year}.${month}."
+    latestTag=$(git tag | grep "^$prefix" | grep "$branchTag" | sort -V | tail -n 1)
+
+    if [ -z "$latestTag" ]; then
+      patch=0
+    else
+      # Extract patch number
+      tagCore=$(echo $latestTag | sed "s|${serviceName}_${year}.${month}.||" | sed "s|-$branchTag-||")
+      patch=$((tagCore + 1))
+    fi
+
+    newTag="${serviceName}_${year}.${month}.${patch}-${branchTag}-"
+    echo "Creating new tag: $newTag"
+
+    # Create and push the new tag
+    git tag -a $newTag -m "Auto-tagged by pipeline: $newTag"
+    git push origin $newTag
+  displayName: 'Tag repo with semantic version and branch'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+	
+##############################################################################################################################
+
+trigger:
+- main  # Adjust to your target branch
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- checkout: self
+
+- script: |
+    git config user.email "buildagent@azure.com"
+    git config user.name "Azure DevOps Pipeline"
+
+    # Fetch all tags
+    git fetch --tags
+
+    # Get current year and month
+    year=$(date +%Y)
+    month=$(date +%m)
+
+    # Filter tags matching current year and month
+    latestTag=$(git tag | grep "^$year\.$month\." | sort -V | tail -n 1)
+
+    if [ -z "$latestTag" ]; then
+      patch=0
+    else
+      patch=${latestTag##*.}
+      patch=$((patch + 1))
+    fi
+
+    newTag="$year.$month.$patch"
+    echo "Creating new tag: $newTag"
+
+    # Create and push the new tag
+    git tag -a $newTag -m "Auto-tagged by pipeline: $newTag"
+    git push origin $newTag
+  displayName: 'Tag repo with semantic version'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+	
+############################################################################################################################
+
+
