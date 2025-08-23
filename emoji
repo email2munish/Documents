@@ -43,4 +43,54 @@
 - 🧪 Test Tube – experiment or test info
 - 🧬 DNA – scientific data
 
+JAva 21+
+String content = Files.readString(Path.of("yourfile.txt"));
+boolean containsEmoji = content.codePoints().anyMatch(Character::isEmoji);
 
+if (containsEmoji) {
+    System.out.println("💡 Emoji found!");
+}
+or
+boolean hasLightBulb = content.contains("💡");
+
+Java < 21
+
+Pattern emojiPattern = Pattern.compile("[\\uD83D\\uDCA1]"); // 💡 is U+1F4A1
+Matcher matcher = emojiPattern.matcher(content);
+
+if (matcher.find()) {
+    System.out.println("💡 Emoji found!");
+}
+To identify the 💡 emoji (or any emoji) in a file using Java, you can approach it in a few ways depending on your Java version and needs. Here's a breakdown:
+
+✅ Option 1: Java 21+ Built-in Support
+Java 21 introduced native emoji detection via the Character class:
+String content = Files.readString(Path.of("yourfile.txt"));
+boolean containsEmoji = content.codePoints().anyMatch(Character::isEmoji);
+
+if (containsEmoji) {
+    System.out.println("💡 Emoji found!");
+}
+
+
+This checks if any Unicode code point in the file is an emoji. You can also filter for specific ones like 💡:
+boolean hasLightBulb = content.contains("💡");
+
+
+
+✅ Option 2: Regex for Surrogate Pairs (Java < 21)
+Emojis like 💡 are represented as surrogate pairs in UTF-16. You can use regex to find them:
+Pattern emojiPattern = Pattern.compile("[\\uD83D\\uDCA1]"); // 💡 is U+1F4A1
+Matcher matcher = emojiPattern.matcher(content);
+
+if (matcher.find()) {
+    System.out.println("💡 Emoji found!");
+}
+
+
+💡 has the Unicode code point U+1F4A1, which in UTF-16 is \uD83D\uDCA1.
+
+✅ Option 3: Using External Libraries
+You can use libraries like emoji-java (though it's not always up-to-date):
+
+EmojiManager.containsEmoji("💡"); // returns true
