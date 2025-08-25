@@ -1,0 +1,95 @@
+{
+
+  "build_id": 234,
+  "artifact_id": 234,
+  "ci_date": "2025-08-24T19:33:00-05:00"
+
+  "sqr_issues": 1,
+  "new_sqr_issues": 1,
+  "sqr_rating": "A",
+  "new_sqr_rating": "reliability_4",
+  "sqr_remediation_effort": "reliability_5",
+  "new_sqr_remediation_effort": "reliability_6",
+
+  "sqm_issues": 1,
+  "new_sqm_issues": 1,
+  "sqm_remediation_effort": "maintainability_3",
+  "new_sqm_remediation_effort": "maintainability_4",
+  "sqm_debt_ratio": "maintainability_5",
+  "new_sqm_debt_ratio": "maintainability_6",
+  "sqm_rating": "maintainability_7",
+  "new_sqm_rating": "maintainability_8",
+
+  "coverage": 1,
+  "new_coverage": 1,
+  "lines_to_cover": 1,
+  "new_lines_to_cover": 1,
+  "uncovered_lines": 1,
+  "new_uncovered_lines": 1,
+  "tests": 1,
+  "test_errors": 1,
+  "test_failures": 1,
+  "skipped_tests": 1,
+  "test_execution_time": 1,
+  "test_success_density": 1,
+
+  "duplicated_lines_density": 1,
+  "new_duplicated_lines_density": 1,
+  "duplicated_lines": 1,
+  "duplicated_blocks": 1,
+  "new_duplicated_blocks": 1,
+  "duplicated_files": 1,
+
+  "new_lines": 1,
+  "ncloc": 1,
+  "lines": 1,
+  "statements": 1,
+  "functions": 1,
+  "classes": 1,
+  "files": 1,
+  "comment_lines": 1,
+  "comment_lines_density": 1,
+
+  "complexity": 1,
+  "cognitive_complexity": 1,
+
+  "violations": 1,
+  "new_violations": 1,
+  "open_issues": 1,
+  "accepted_issues": 1,
+  "false_positive_issues": 1,
+  "software_quality_blocker_issues": 1,
+  "software_quality_high_issues": 1,
+  "software_quality_medium_issues": 1,
+  "software_quality_low_issues": 1,
+  
+  "sast_issue_low": 1,
+  "sast_issue_medium": 1,
+  "sast_issue_high": 1,
+  "sast_issue_critical": 1,
+  "sast_issue_blocker": 1,
+  "sast_issue_total": 5,
+
+  "sca_issue_low": 1,
+  "sca_issue_medium": 1,
+  "sca_issue_high": 1,
+  "sca_issue_critical": 1,
+  "sca_issue_blocker": 1,
+  "sca_issue_total": 5,
+
+  "twist_vulnerabilities_low": 1,
+  "twist_vulnerabilities_medium": 1,
+  "twist_vulnerabilities_high": 1,
+  "twist_vulnerabilities_critical": 1,
+  "twist_vulnerabilities_blocker": 1,
+  "twist_vulnerabilities_total": 5,
+
+  "twist_compliance_low": 1,
+  "twist_compliance_medium": 1,
+  "twist_compliance_high": 1,
+  "twist_compliance_critical": 1,
+  "twist_compliance_blocker": 1,
+  "twist_compliance_total": 5
+
+
+}

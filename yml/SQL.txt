@@ -1,0 +1,130 @@
+-- Table 1: CI Metrics
+CREATE TABLE CI_Metrics (
+    build_id INT PRIMARY KEY,
+    artifact_id INT NOT NULL,
+    ci_date DATETIMEOFFSET NOT NULL,
+
+    -- SQR Metrics
+    sqr_issues INT,
+    new_sqr_issues INT,
+    sqr_rating VARCHAR(50),
+    new_sqr_rating VARCHAR(50),
+    sqr_remediation_effort VARCHAR(50),
+    new_sqr_remediation_effort VARCHAR(50),
+
+    -- SQM Metrics
+    sqm_issues INT,
+    new_sqm_issues INT,
+    sqm_remediation_effort VARCHAR(50),
+    new_sqm_remediation_effort VARCHAR(50),
+    sqm_debt_ratio VARCHAR(50),
+    new_sqm_debt_ratio VARCHAR(50),
+    sqm_rating VARCHAR(50),
+    new_sqm_rating VARCHAR(50),
+
+    -- Coverage & Tests
+    coverage INT,
+    new_coverage INT,
+    lines_to_cover INT,
+    new_lines_to_cover INT,
+    uncovered_lines INT,
+    new_uncovered_lines INT,
+    tests INT,
+    test_errors INT,
+    test_failures INT,
+    skipped_tests INT,
+    test_execution_time INT,
+    test_success_density INT,
+
+    -- Duplication
+    duplicated_lines_density INT,
+    new_duplicated_lines_density INT,
+    duplicated_lines INT,
+    duplicated_blocks INT,
+    new_duplicated_blocks INT,
+    duplicated_files INT,
+
+    -- Code Metrics
+    new_lines INT,
+    ncloc INT,
+    lines INT,
+    statements INT,
+    functions INT,
+    classes INT,
+    files INT,
+    comment_lines INT,
+    comment_lines_density INT,
+
+    -- Complexity
+    complexity INT,
+    cognitive_complexity INT,
+
+    -- Violations
+    violations INT,
+    new_violations INT,
+    open_issues INT,
+    accepted_issues INT,
+    false_positive_issues INT,
+    software_quality_blocker_issues INT,
+    software_quality_high_issues INT,
+    software_quality_medium_issues INT,
+    software_quality_low_issues INT,
+
+    -- SAST
+    sast_issue_low INT,
+    sast_issue_medium INT,
+    sast_issue_high INT,
+    sast_issue_critical INT,
+    sast_issue_blocker INT,
+    sast_issue_total INT,
+
+    -- SCA
+    sca_issue_low INT,
+    sca_issue_medium INT,
+    sca_issue_high INT,
+    sca_issue_critical INT,
+    sca_issue_blocker INT,
+    sca_issue_total INT,
+
+    -- Twist Vulnerabilities
+    twist_vulnerabilities_low INT,
+    twist_vulnerabilities_medium INT,
+    twist_vulnerabilities_high INT,
+    twist_vulnerabilities_critical INT,
+    twist_vulnerabilities_blocker INT,
+    twist_vulnerabilities_total INT,
+
+    -- Twist Compliance
+    twist_compliance_low INT,
+    twist_compliance_medium INT,
+    twist_compliance_high INT,
+    twist_compliance_critical INT,
+    twist_compliance_blocker INT,
+    twist_compliance_total INT
+);
+-- Table 2: CD_Metadata (Dependent table with foreign key)
+CREATE TABLE CD_Metadata (
+    cd_id INT IDENTITY(1,1) PRIMARY KEY,  -- Optional surrogate key
+    build_id INT NOT NULL,
+    artifact_id INT NOT NULL,
+    env_level INT,
+    cd_date DATETIMEOFFSET,
+    ct_date DATETIMEOFFSET,
+    started_by DATETIMEOFFSET,
+    approver DATETIMEOFFSET,
+    deployment_status VARCHAR(20),
+    total_tests DATETIMEOFFSET,
+    passed_tests DATETIMEOFFSET,
+    failed_tests DATETIMEOFFSET,
+    notrun_tests DATETIMEOFFSET,
+    tests_status VARCHAR(20),
+    tests_coverage INT,
+    code_coverage INT,
+
+    -- Foreign key constraint
+    CONSTRAINT FK_CD_Build FOREIGN KEY (build_id)
+        REFERENCES CI_Metrics(build_id)
+        ON DELETE CASCADE
+);
+
+
